@@ -26,10 +26,8 @@ from PyQt5.QtCore import QVariant
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis._core import QgsRasterBandStats, QgsField
-from qgis.core import QgsProject
+from qgis._core import QgsField, QgsCoordinateTransform, QgsProject, QgsPointXY
 from scipy.interpolate import RegularGridInterpolator
-from qgis.core.additions.edit import edit
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -216,7 +214,11 @@ class raster_value_regular:
             y_arr = np.array([extent.yMaximum() - row * extent.height() / height for row in range(height)])
             data = np.array([[raster_data[row, col] for col in range(width)] for row in range(height)])
             interpolator_regular = RegularGridInterpolator((x_arr, y_arr), data.T)
+            epsg_raster = raster.crs()
             layer = self.dlg.layer.currentLayer()
+            epsg_layer = layer.crs()
+            print(f"{epsg_layer = }")
+            print(f"{epsg_raster = }")
             attribute_name = self.dlg.attribute.text()
             if not len(attribute_name):
                 attribute_name = "raster_value_regular"
@@ -227,11 +229,15 @@ class raster_value_regular:
                 layer.addAttribute(field)
                 layer.commitChanges()
             layer.startEditing()
+            transform = QgsCoordinateTransform(epsg_layer, epsg_raster, QgsProject.instance().transformContext())
             for feature in layer.getFeatures():
                 geometry = feature.geometry()
                 pos = geometry.asPoint()
+                x, y = pos.x(), pos.y()
+                point = QgsPointXY(x, y)
+                target_point = transform.transform(point)
                 try:
-                    value = interpolator_regular((pos.x(), pos.y()))
+                    value = interpolator_regular(target_point)
                 except ValueError:
                     value = float("Nan")
                 feature[attribute_name] = float(value)
