@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/raster_value_regular" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
