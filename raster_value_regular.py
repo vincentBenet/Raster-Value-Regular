@@ -192,17 +192,15 @@ class raster_value_regular:
         if self.first_start == True:
             self.first_start = False
             self.dlg = raster_value_regularDialog()
+            self.dlg.raster.layerChanged.connect(lambda layer: self.dlg.band.setLayer(layer))  # Set band layer to selected raster layer
 
-        self.dlg.raster.setFilters(1)
-        self.dlg.layer.setFilters(4)
-        self.dlg.band.setLayer(self.dlg.raster.currentLayer())
+        self.dlg.raster.setFilters(1)  # Filter combobox to select only raster layers
+        self.dlg.layer.setFilters(4)  # Filter combobox to select only vector Points layers
 
-        # show the dialog
         self.dlg.show()
-        # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
         if result:
+            # Get data from raster layer
             raster = self.dlg.raster.currentLayer()
             extent = raster.extent()
             width = raster.width()
@@ -213,12 +211,12 @@ class raster_value_regular:
             x_arr = np.array([extent.xMinimum() + col * extent.width() / width for col in range(width)])
             y_arr = np.array([extent.yMaximum() - row * extent.height() / height for row in range(height)])
             data = np.array([[raster_data[row, col] for col in range(width)] for row in range(height)])
+            
+            # Create interpolation function for the raster Layer
             interpolator_regular = RegularGridInterpolator((x_arr, y_arr), data.T)
-            epsg_raster = raster.crs()
+            
+            # Add attribute field to the vector layer
             layer = self.dlg.layer.currentLayer()
-            epsg_layer = layer.crs()
-            print(f"{epsg_layer = }")
-            print(f"{epsg_raster = }")
             attribute_name = self.dlg.attribute.text()
             if not len(attribute_name):
                 attribute_name = "raster_value_regular"
@@ -228,14 +226,13 @@ class raster_value_regular:
                 layer.startEditing()
                 layer.addAttribute(field)
                 layer.commitChanges()
+            
+            # Assign value of interpolate raster to the vector layer attribute
+            transform = QgsCoordinateTransform(layer.crs(), raster.crs(), QgsProject.instance().transformContext())  # Projection function if differents crs
             layer.startEditing()
-            transform = QgsCoordinateTransform(epsg_layer, epsg_raster, QgsProject.instance().transformContext())
             for feature in layer.getFeatures():
-                geometry = feature.geometry()
-                pos = geometry.asPoint()
-                x, y = pos.x(), pos.y()
-                point = QgsPointXY(x, y)
-                target_point = transform.transform(point)
+                pos = feature.geometry().asPoint()
+                target_point = transform.transform(QgsPointXY(pos.x(), pos.y()))  # Reproject coordinates of vector layer in raster crs
                 try:
                     value = interpolator_regular(target_point)
                 except ValueError:
